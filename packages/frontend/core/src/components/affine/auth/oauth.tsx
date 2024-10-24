@@ -35,7 +35,7 @@ export function OAuth({ redirectUrl }: { redirectUrl?: string }) {
   const oauthProviders = useLiveData(
     serverConfig.config$.map(r => r?.oauthProviders)
   );
-  const schema = urlService.getClientSchema();
+  const scheme = urlService.getClientScheme();
 
   if (!oauth) {
     return <Skeleton height={50} />;
@@ -46,7 +46,7 @@ export function OAuth({ redirectUrl }: { redirectUrl?: string }) {
       key={provider}
       provider={provider}
       redirectUrl={redirectUrl}
-      schema={schema}
+      scheme={scheme}
       popupWindow={url => {
         urlService.openPopupWindow(url);
       }}
@@ -57,12 +57,12 @@ export function OAuth({ redirectUrl }: { redirectUrl?: string }) {
 function OAuthProvider({
   provider,
   redirectUrl,
-  schema,
+  scheme,
   popupWindow,
 }: {
   provider: OAuthProviderType;
   redirectUrl?: string;
-  schema?: string;
+  scheme?: string;
   popupWindow: (url: string) => void;
 }) {
   const { icon } = OAuthProviderMap[provider];
@@ -76,8 +76,8 @@ function OAuthProvider({
       params.set('redirect_uri', redirectUrl);
     }
 
-    if (schema) {
-      params.set('client', schema);
+    if (scheme) {
+      params.set('client', scheme);
     }
 
     // TODO: Android app scheme not implemented
@@ -87,7 +87,7 @@ function OAuthProvider({
       BUILD_CONFIG.serverUrlPrefix + `/oauth/login?${params.toString()}`;
 
     popupWindow(oauthUrl);
-  }, [popupWindow, provider, redirectUrl, schema]);
+  }, [popupWindow, provider, redirectUrl, scheme]);
 
   return (
     <Button

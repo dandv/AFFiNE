@@ -160,9 +160,9 @@ export function useNavigateHelper() {
   );
 
   const openInApp = useCallback(
-    (schema: string, path: string) => {
-      const encodedUrl = encodeURIComponent(`${schema}://${path}`);
-      return navigate(`/open-app/url?schema=${schema}&url=${encodedUrl}`);
+    (scheme: string, path: string) => {
+      const encodedUrl = encodeURIComponent(`${scheme}://${path}`);
+      return navigate(`/open-app/url?scheme=${scheme}&url=${encodedUrl}`);
     },
     [navigate]
   );

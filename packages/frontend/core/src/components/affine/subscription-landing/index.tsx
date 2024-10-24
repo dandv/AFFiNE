@@ -20,8 +20,8 @@ const UpgradeSuccessLayout = ({
 
   const { jumpToIndex, openInApp } = useNavigateHelper();
   const openAffine = useCallback(() => {
-    if (params.get('schema')) {
-      openInApp(params.get('schema') ?? 'affine', 'bring-to-front');
+    if (params.get('scheme')) {
+      openInApp(params.get('scheme') ?? 'affine', 'bring-to-front');
     } else {
       jumpToIndex();
     }

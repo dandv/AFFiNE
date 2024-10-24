@@ -5,6 +5,10 @@ import {
   SettingWrapper,
 } from '@affine/component/setting-components';
 import { useAppUpdater } from '@affine/core/components/hooks/use-app-updater';
+import {
+  appIconMap,
+  appNames,
+} from '@affine/core/modules/open-in-app/constant';
 import { UrlService } from '@affine/core/modules/url';
 import { useI18n } from '@affine/i18n';
 import { mixpanel } from '@affine/track';
@@ -13,7 +17,6 @@ import { useService } from '@toeverything/infra';
 import { useCallback } from 'react';
 
 import { useAppSettingHelper } from '../../../../../components/hooks/affine/use-app-setting-helper';
-import { appIconMap, appNames } from '../../../../../desktop/pages/open-app';
 import { relatedLinks } from './config';
 import * as styles from './style.css';
 import { UpdateCheckSection } from './update-check-section';

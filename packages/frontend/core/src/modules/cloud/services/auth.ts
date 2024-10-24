@@ -119,7 +119,7 @@ export class AuthService extends Service {
   ) {
     track.$.$.auth.signIn({ method: 'magic-link' });
     try {
-      const scheme = this.urlService.getClientSchema();
+      const scheme = this.urlService.getClientScheme();
       const magicLinkUrlParams = new URLSearchParams();
       if (redirectUrl) {
         magicLinkUrlParams.set('redirect_uri', redirectUrl);

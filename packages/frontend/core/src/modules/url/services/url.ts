@@ -1,19 +1,19 @@
 import { Service } from '@toeverything/infra';
 
-import type { ClientSchemaProvider } from '../providers/client-schema';
+import type { ClientSchemeProvider } from '../providers/client-schema';
 import type { PopupWindowProvider } from '../providers/popup-window';
 
 export class UrlService extends Service {
   constructor(
     // those providers are optional, because they are not always available in some environments
     private readonly popupWindowProvider?: PopupWindowProvider,
-    private readonly clientSchemaProvider?: ClientSchemaProvider
+    private readonly clientSchemeProvider?: ClientSchemeProvider
   ) {
     super();
   }
 
-  getClientSchema() {
-    return this.clientSchemaProvider?.getClientSchema();
+  getClientScheme() {
+    return this.clientSchemeProvider?.getClientScheme();
   }
 
   /**

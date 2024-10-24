@@ -7,10 +7,8 @@ import { configureCommonModules } from '@affine/core/modules';
 import { AuthService, WebSocketAuthProvider } from '@affine/core/modules/cloud';
 import { I18nProvider } from '@affine/core/modules/i18n';
 import { configureLocalStorageStateStorageImpls } from '@affine/core/modules/storage';
-import {
-  ClientSchemaProvider,
-  PopupWindowProvider,
-} from '@affine/core/modules/url';
+import { PopupWindowProvider } from '@affine/core/modules/url';
+import { ClientSchemeProvider } from '@affine/core/modules/url/providers/client-schema';
 import { configureIndexedDBUserspaceStorageProvider } from '@affine/core/modules/userspace';
 import { configureBrowserWorkbenchModule } from '@affine/core/modules/workbench';
 import {
@@ -51,8 +49,8 @@ framework.impl(PopupWindowProvider, {
     }).catch(console.error);
   },
 });
-framework.impl(ClientSchemaProvider, {
-  getClientSchema() {
+framework.impl(ClientSchemeProvider, {
+  getClientScheme() {
     return 'affine';
   },
 });

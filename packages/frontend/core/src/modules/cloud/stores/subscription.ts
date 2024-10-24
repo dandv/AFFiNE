@@ -23,14 +23,14 @@ const SUBSCRIPTION_CACHE_KEY = 'subscription:';
 
 const getDefaultSubscriptionSuccessCallbackLink = (
   plan: SubscriptionPlan | null,
-  schema?: string
+  scheme?: string
 ) => {
   const path =
     plan === SubscriptionPlan.AI ? '/ai-upgrade-success' : '/upgrade-success';
   const urlString = getAffineCloudBaseUrl() + path;
   const url = new URL(urlString);
-  if (schema) {
-    url.searchParams.set('schema', schema);
+  if (scheme) {
+    url.searchParams.set('scheme', scheme);
   }
   return url.toString();
 };
@@ -133,7 +133,7 @@ export class SubscriptionStore extends Store {
             input.successCallbackLink ||
             getDefaultSubscriptionSuccessCallbackLink(
               input.plan,
-              this.urlService.getClientSchema()
+              this.urlService.getClientScheme()
             ),
         },
       },
