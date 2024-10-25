@@ -53,7 +53,7 @@ export const Component = (): ReactElement => {
       match &&
       match.params.docId &&
       match.params.workspaceId &&
-      // // TODO(eyhn): need a better way to check if it's a docId
+      // TODO(eyhn): need a better way to check if it's a docId
       workbenchRoutes.find(route =>
         matchPath(route.path, '/' + match.params.docId)
       )?.path === '/:pageId'

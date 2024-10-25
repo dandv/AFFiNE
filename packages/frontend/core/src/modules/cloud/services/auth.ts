@@ -1,8 +1,5 @@
-import { notify } from '@affine/component';
 import { AIProvider } from '@affine/core/blocksuite/presets/ai';
-import { apis, events } from '@affine/electron-api';
 import type { OAuthProviderType } from '@affine/graphql';
-import { I18n } from '@affine/i18n';
 import { track } from '@affine/track';
 import {
   ApplicationFocused,
@@ -78,33 +75,6 @@ export class AuthService extends Service {
 
   private onApplicationStart() {
     this.session.revalidate();
-
-    if (BUILD_CONFIG.isElectron) {
-      events?.ui.onAuthenticationRequest(({ method, payload }) => {
-        (async () => {
-          if (!(await apis?.ui.isActiveTab())) {
-            return;
-          }
-          switch (method) {
-            case 'magic-link': {
-              const { email, token } = payload;
-              await this.signInMagicLink(email, token);
-              break;
-            }
-            case 'oauth': {
-              const { code, state, provider } = payload;
-              await this.signInOauth(code, state, provider);
-              break;
-            }
-          }
-        })().catch(e => {
-          notify.error({
-            title: I18n['com.affine.auth.toast.title.failed'](),
-            message: (e as any).message,
-          });
-        });
-      });
-    }
   }
 
   private onApplicationFocused() {

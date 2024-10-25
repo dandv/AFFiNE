@@ -4,17 +4,17 @@ import {
 } from '@affine/core/commands';
 import { FindInPageService } from '@affine/core/modules/find-in-page/services/find-in-page';
 import { track } from '@affine/track';
-import { useService } from '@toeverything/infra';
+import { useServiceOptional } from '@toeverything/infra';
 import { useCallback, useEffect } from 'react';
 
 export function useRegisterFindInPageCommands() {
-  const findInPage = useService(FindInPageService).findInPage;
+  const findInPage = useServiceOptional(FindInPageService)?.findInPage;
   const toggleVisible = useCallback(() => {
     // get the selected text in page
     const selection = window.getSelection();
     const selectedText = selection?.toString();
 
-    findInPage.toggleVisible(selectedText);
+    findInPage?.toggleVisible(selectedText);
   }, [findInPage]);
 
   useEffect(() => {
