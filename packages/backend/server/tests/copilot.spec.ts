@@ -669,7 +669,7 @@ test('should be able to get provider', async t => {
   {
     const p = await provider.getProviderByCapability(
       CopilotCapability.ImageToText,
-      'gpt-4o'
+      'gpt-4o-2024-08-06'
     );
     t.is(
       p?.type.toString(),
