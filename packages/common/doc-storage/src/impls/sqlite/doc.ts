@@ -39,11 +39,6 @@ export class SqliteDocStorage extends DocStorage<SqliteDocStorageOptions> {
     return this.db.deleteDoc(docId);
   }
 
-  override async deleteSpace(): Promise<void> {
-    await this.disconnect();
-    // rm this.dbPath
-  }
-
   override async getSpaceDocTimestamps(
     after?: number
   ): Promise<Record<string, number> | null> {
@@ -100,16 +95,5 @@ export class SqliteDocStorage extends DocStorage<SqliteDocStorageOptions> {
       docId,
       updates.map(update => new Date(update.timestamp))
     );
-  }
-
-  override async listDocHistories() {
-    return [];
-  }
-  override async getDocHistory() {
-    return null;
-  }
-
-  protected override async createDocHistory(): Promise<boolean> {
-    return false;
   }
 }

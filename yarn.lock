@@ -476,6 +476,7 @@ __metadata:
     "@affine/graphql": "workspace:*"
     "@affine/native": "workspace:*"
     "@types/lodash-es": "npm:^4.17.12"
+    eventemitter2: "npm:^6.4.9"
     idb: "npm:^8.0.0"
     lodash-es: "npm:^4.17.21"
     socket.io-client: "npm:^4.7.5"
@@ -20239,7 +20240,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eventemitter2@npm:6.4.9":
+"eventemitter2@npm:6.4.9, eventemitter2@npm:^6.4.9":
   version: 6.4.9
   resolution: "eventemitter2@npm:6.4.9"
   checksum: 10/b829b1c6b11e15926b635092b5ad62b4463d1c928859831dcae606e988cf41893059e3541f5a8209d21d2f15314422ddd4d84d20830b4bf44978608d15b06b08

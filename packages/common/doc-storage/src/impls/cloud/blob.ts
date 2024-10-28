@@ -13,7 +13,6 @@ import {
   type ListedBlobRecord,
 } from '../../storage';
 
-// TODO(@forehalo): websocket?
 interface CloudBlobStorageOptions extends BlobStorageOptions {
   endpoint: string;
 }

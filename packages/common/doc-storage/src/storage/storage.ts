@@ -1,3 +1,4 @@
+import type { OpConsumer } from '../op';
 import { Connection } from './connection';
 
 export type SpaceType = 'workspace' | 'userspace';
@@ -21,4 +22,6 @@ export abstract class Storage<
   constructor(public readonly options: Opts) {
     super();
   }
+
+  abstract register(consumer: OpConsumer): void;
 }

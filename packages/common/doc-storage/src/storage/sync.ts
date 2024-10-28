@@ -1,3 +1,10 @@
+import { type OpConsumer, type OpHandler } from '../op';
+import {
+  GetPeerClocksOp,
+  GetPeerPushedClocksOp,
+  SetPeerClockOp,
+  SetPeerPushedClockOp,
+} from './ops';
 import { Storage, type StorageOptions } from './storage';
 
 export interface SyncStorageOptions extends StorageOptions {}
@@ -10,17 +17,15 @@ export interface PeerClock {
 export abstract class SyncStorage<
   Opts extends SyncStorageOptions = SyncStorageOptions,
 > extends Storage<Opts> {
-  abstract getPeerClocks(peer: string): Promise<Record<string, number>>;
-  abstract setPeerClock(
-    peer: string,
-    docId: string,
-    clock: number
-  ): Promise<void>;
+  abstract getPeerClocks: OpHandler<GetPeerClocksOp>;
+  abstract setPeerClock: OpHandler<SetPeerClockOp>;
+  abstract getPeerPushedClocks: OpHandler<GetPeerPushedClocksOp>;
+  abstract setPeerPushedClock: OpHandler<SetPeerPushedClockOp>;
 
-  abstract getPeerPushedClocks(peer: string): Promise<Record<string, number>>;
-  abstract setPeerPushedClock(
-    peer: string,
-    docId: string,
-    clock: number
-  ): Promise<void>;
+  override register(consumer: OpConsumer): void {
+    consumer.register(GetPeerClocksOp, this.getPeerClocks);
+    consumer.register(SetPeerClockOp, this.setPeerClock);
+    consumer.register(GetPeerPushedClocksOp, this.getPeerPushedClocks);
+    consumer.register(SetPeerPushedClockOp, this.setPeerPushedClock);
+  }
 }

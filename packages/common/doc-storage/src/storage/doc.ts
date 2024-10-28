@@ -1,19 +1,18 @@
-import {
-  applyUpdate,
-  diffUpdate,
-  Doc,
-  encodeStateAsUpdate,
-  encodeStateVector,
-  encodeStateVectorFromUpdate,
-  mergeUpdates,
-  UndoManager,
-} from 'yjs';
+import { diffUpdate, encodeStateVectorFromUpdate, mergeUpdates } from 'yjs';
 
+import { Op, type OpConsumer, type OpHandler } from '../op';
+import type { Lock } from './lock';
 import { SingletonLocker } from './lock';
+import {
+  DeleteDocOp,
+  GetDocDiffOp,
+  GetDocOp,
+  GetDocTimestamps,
+  PushDocUpdateOp,
+} from './ops';
 import { Storage, type StorageOptions } from './storage';
 
 export interface DocRecord {
-  spaceId: string;
   docId: string;
   bin: Uint8Array;
   timestamp: number;
@@ -27,14 +26,10 @@ export interface DocDiff {
 }
 
 export interface DocUpdate {
+  docId: string;
   bin: Uint8Array;
   timestamp: number;
   editor?: string;
-}
-
-export interface HistoryFilter {
-  before?: number;
-  limit?: number;
 }
 
 export interface Editor {
@@ -46,17 +41,16 @@ export interface DocStorageOptions extends StorageOptions {
   mergeUpdates?: (updates: Uint8Array[]) => Promise<Uint8Array> | Uint8Array;
 }
 
+// internal op
+export class GetDocSnapshotOp extends Op<{ docId: string }, DocRecord | null> {}
+
 export abstract class DocStorage<
   Opts extends DocStorageOptions = DocStorageOptions,
 > extends Storage<Opts> {
+  private readonly locker = new SingletonLocker();
+
   abstract get name(): string;
 
-  private readonly locker = new SingletonLocker();
-  protected readonly updatesListeners = new Set<
-    (docId: string, updates: Uint8Array[], timestamp: number) => void
-  >();
-
-  // REGION: open apis
   /**
    * Tell a binary is empty yjs binary or not.
    *
@@ -74,13 +68,14 @@ export abstract class DocStorage<
     );
   }
 
+  // REGION: open apis by Op system
   /**
    * Get a doc record with latest binary.
    */
-  async getDoc(docId: string): Promise<DocRecord | null> {
+  getDoc: OpHandler<GetDocOp> = async ({ docId }, consumer) => {
     await using _lock = await this.lockDocForUpdate(docId);
 
-    const snapshot = await this.getDocSnapshot(docId);
+    const snapshot = await this.getDocSnapshot({ docId }, consumer);
     const updates = await this.getDocUpdates(docId);
 
     if (updates.length) {
@@ -96,11 +91,7 @@ export abstract class DocStorage<
         editor,
       };
 
-      const success = await this.setDocSnapshot(newSnapshot);
-      // if there is old snapshot, create a new history record
-      if (success && snapshot) {
-        await this.createDocHistory(snapshot);
-      }
+      await this.setDocSnapshot(newSnapshot, snapshot);
 
       // always mark updates as merged unless throws
       await this.markUpdatesMerged(docId, updates);
@@ -109,128 +100,56 @@ export abstract class DocStorage<
     }
 
     return snapshot;
-  }
+  };
 
   /**
    * Get a yjs binary diff with the given state vector.
    */
-  async getDocDiff(
-    docId: string,
-    stateVector?: Uint8Array
-  ): Promise<DocDiff | null> {
-    const doc = await this.getDoc(docId);
+  getDocDiff: OpHandler<GetDocDiffOp> = async ({ docId, state }, ctx) => {
+    const doc = await this.getDoc({ docId }, ctx);
 
     if (!doc) {
       return null;
     }
 
-    const missing = stateVector ? diffUpdate(doc.bin, stateVector) : doc.bin;
-    const state = encodeStateVectorFromUpdate(doc.bin);
-
     return {
-      missing,
-      state,
+      missing: state ? diffUpdate(doc.bin, state) : doc.bin,
+      state: encodeStateVectorFromUpdate(doc.bin),
       timestamp: doc.timestamp,
     };
-  }
+  };
 
   /**
    * Push updates into storage
    */
-  abstract pushDocUpdates(
-    docId: string,
-    updates: Uint8Array[],
-    editor?: string
-  ): Promise<number>;
-
-  /**
-   * Listen to doc updates pushed event
-   */
-  onReceiveDocUpdates(
-    listener: (docId: string, updates: Uint8Array[], timestamp: number) => void
-  ): () => void {
-    this.updatesListeners.add(listener);
-
-    return () => {
-      this.updatesListeners.delete(listener);
-    };
-  }
-
-  /**
-   * Delete a specific doc data with all snapshots and updates
-   */
-  abstract deleteDoc(docId: string): Promise<void>;
-  /**
-   * Delete the whole space data with all docs
-   */
-  abstract deleteSpace(): Promise<void>;
+  abstract pushDocUpdate: OpHandler<PushDocUpdateOp>;
 
   /**
    * Get all docs timestamps info. especially for useful in sync process.
    */
-  abstract getSpaceDocTimestamps(
-    after?: number
-  ): Promise<Record<string, number> | null>;
+  abstract getDocTimestamps: OpHandler<GetDocTimestamps>;
 
   /**
-   * Rollback the doc in a update patch way using [yjs.UndoManager].
+   * Delete a specific doc data with all snapshots and updates
    */
-  async rollbackDoc(
-    docId: string,
-    timestamp: number,
-    editor?: string
-  ): Promise<void> {
-    await using _lock = await this.lockDocForUpdate(docId);
-    const toSnapshot = await this.getDocHistory(docId, timestamp);
-    if (!toSnapshot) {
-      throw new Error('Can not find the version to rollback to.');
-    }
+  abstract deleteDoc: OpHandler<DeleteDocOp>;
 
-    const fromSnapshot = await this.getDocSnapshot(docId);
-
-    if (!fromSnapshot) {
-      throw new Error('Can not find the current version of the doc.');
-    }
-
-    const change = this.generateChangeUpdate(fromSnapshot.bin, toSnapshot.bin);
-    await this.pushDocUpdates(docId, [change], editor);
-    // force create a new history record after rollback
-    await this.createDocHistory(fromSnapshot, true);
+  override register(consumer: OpConsumer): void {
+    consumer.register(GetDocOp, this.getDoc);
+    consumer.register(GetDocDiffOp, this.getDocDiff);
+    consumer.register(PushDocUpdateOp, this.pushDocUpdate);
+    consumer.register(GetDocTimestamps, this.getDocTimestamps);
+    consumer.register(DeleteDocOp, this.deleteDoc);
+    consumer.register(GetDocSnapshotOp, this.getDocSnapshot);
   }
-
-  /**
-   * List all history snapshot of a doc.
-   */
-  abstract listDocHistories(
-    docId: string,
-    query: HistoryFilter
-  ): Promise<{ timestamp: number; editor: Editor | null }[]>;
-
-  /**
-   * Get a history snapshot of a doc.
-   */
-  abstract getDocHistory(
-    docId: string,
-    timestamp: number
-  ): Promise<DocRecord | null>;
 
   // ENDREGION
 
   // REGION: api for internal usage
-  protected dispatchDocUpdatesListeners(
-    docId: string,
-    updates: Uint8Array[],
-    timestamp: number
-  ): void {
-    this.updatesListeners.forEach(cb => {
-      cb(docId, updates, timestamp);
-    });
-  }
-
   /**
    * Get a doc snapshot from storage
    */
-  protected abstract getDocSnapshot(docId: string): Promise<DocRecord | null>;
+  protected abstract getDocSnapshot: OpHandler<GetDocSnapshotOp>;
   /**
    * Set the doc snapshot into storage
    *
@@ -248,7 +167,11 @@ export abstract class DocStorage<
    *
    * ```
    */
-  protected abstract setDocSnapshot(snapshot: DocRecord): Promise<boolean>;
+  protected abstract setDocSnapshot(
+    snapshot: DocRecord,
+    prevSnapshot: DocRecord | null
+  ): Promise<boolean>;
+
   /**
    * Get all updates of a doc that haven't been merged into snapshot.
    *
@@ -265,15 +188,6 @@ export abstract class DocStorage<
     docId: string,
     updates: DocUpdate[]
   ): Promise<number>;
-
-  /**
-   * Create a new history record for a doc.
-   * Will always be called after the doc snapshot is updated.
-   */
-  protected abstract createDocHistory(
-    snapshot: DocRecord,
-    force?: boolean
-  ): Promise<boolean>;
 
   /**
    * Merge doc updates into a single update.
@@ -293,33 +207,14 @@ export abstract class DocStorage<
     const finalUpdate = await merge(updates.map(u => u.bin));
 
     return {
+      docId: lastUpdate.docId,
       bin: finalUpdate,
       timestamp: lastUpdate.timestamp,
       editor: lastUpdate.editor,
     };
   }
 
-  protected generateChangeUpdate(newerBin: Uint8Array, olderBin: Uint8Array) {
-    const newerDoc = new Doc();
-    applyUpdate(newerDoc, newerBin);
-    const olderDoc = new Doc();
-    applyUpdate(olderDoc, olderBin);
-
-    const newerState = encodeStateVector(newerDoc);
-    const olderState = encodeStateVector(olderDoc);
-
-    const diff = encodeStateAsUpdate(newerDoc, olderState);
-
-    const undoManager = new UndoManager(Array.from(newerDoc.share.values()));
-
-    applyUpdate(olderDoc, diff);
-
-    undoManager.undo();
-
-    return encodeStateAsUpdate(olderDoc, newerState);
-  }
-
-  protected async lockDocForUpdate(docId: string): Promise<AsyncDisposable> {
+  protected async lockDocForUpdate(docId: string): Promise<Lock> {
     return this.locker.lock(`workspace:${this.spaceId}:update`, docId);
   }
 }

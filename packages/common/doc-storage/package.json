@@ -5,13 +5,12 @@
   "private": true,
   "sideEffects": false,
   "exports": {
-    ".": "./index.ts",
-    "./impls/*": "./impls/*",
-    "./storage": "./storage/index.ts"
+    ".": "./index.ts"
   },
   "dependencies": {
     "@affine/graphql": "workspace:*",
     "@affine/native": "workspace:*",
+    "eventemitter2": "^6.4.9",
     "idb": "^8.0.0",
     "lodash-es": "^4.17.21",
     "socket.io-client": "^4.7.5",
