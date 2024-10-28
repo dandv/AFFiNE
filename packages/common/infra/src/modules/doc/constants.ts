@@ -33,4 +33,10 @@ export const BUILT_IN_CUSTOM_PROPERTY_TYPE = [
     type: 'updatedAt',
     index: 'a0000005',
   },
+  {
+    id: 'edgelessTheme',
+    type: 'edgelessTheme',
+    show: 'always-hide',
+    index: 'a0000006',
+  },
 ] as DocCustomPropertyInfo[];

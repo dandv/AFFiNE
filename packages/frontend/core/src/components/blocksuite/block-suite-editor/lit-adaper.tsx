@@ -273,6 +273,9 @@ export const BlocksuiteEdgelessEditor = forwardRef<
   const [specs, portals] = usePatchSpecs(!!shared, 'edgeless');
   const editorRef = useRef<EdgelessEditor | null>(null);
 
+  const doc = useService(DocService).doc;
+  const edgelessColorTheme = useLiveData(doc.properties$).edgelessColorTheme;
+
   const onDocRef = useCallback(
     (el: EdgelessEditor) => {
       editorRef.current = el;
@@ -300,7 +303,12 @@ export const BlocksuiteEdgelessEditor = forwardRef<
 
   return (
     <>
-      <adapted.EdgelessEditor ref={onDocRef} doc={page} specs={specs} />
+      <adapted.EdgelessEditor
+        ref={onDocRef}
+        doc={page}
+        specs={specs}
+        data-theme={edgelessColorTheme}
+      />
       {portals}
     </>
   );

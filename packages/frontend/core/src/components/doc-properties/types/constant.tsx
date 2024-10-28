@@ -3,6 +3,7 @@ import {
   CheckBoxCheckLinearIcon,
   CreatedEditedIcon,
   DateTimeIcon,
+  EdgelessIcon,
   FileIcon,
   HistoryIcon,
   NumberIcon,
@@ -15,6 +16,7 @@ import { CheckboxValue } from './checkbox';
 import { CreatedByValue, UpdatedByValue } from './created-updated-by';
 import { CreateDateValue, DateValue, UpdatedDateValue } from './date';
 import { DocPrimaryModeValue } from './doc-primary-mode';
+import { EdgelessThemeValue } from './edgeless-theme';
 import { JournalValue } from './journal';
 import { NumberValue } from './number';
 import { TagsValue } from './tags';
@@ -91,6 +93,12 @@ export const DocPropertyTypes = {
     value: JournalValue,
     name: 'com.affine.page-properties.property.journal',
     description: 'com.affine.page-properties.property.journal.tooltips',
+  },
+  edgelessTheme: {
+    icon: EdgelessIcon,
+    value: EdgelessThemeValue,
+    name: 'com.affine.page-properties.property.edgelessTheme',
+    description: 'com.affine.page-properties.property.edgelessTheme.tooltips',
   },
 } as Record<
   string,
