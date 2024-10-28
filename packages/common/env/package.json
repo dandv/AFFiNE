@@ -4,7 +4,7 @@
   "type": "module",
   "devDependencies": {
     "@blocksuite/affine": "0.0.0-canary-20241028080828",
-    "vitest": "2.1.1"
+    "vitest": "2.1.4"
   },
   "exports": {
     "./automation": "./src/automation.ts",
