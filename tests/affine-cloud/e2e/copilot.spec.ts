@@ -46,14 +46,14 @@ function getUser() {
   };
 }
 
-// test.skip(
-//   () =>
-//     !process.env.COPILOT_OPENAI_API_KEY ||
-//     !process.env.COPILOT_FAL_API_KEY ||
-//     process.env.COPILOT_OPENAI_API_KEY === '1' ||
-//     process.env.COPILOT_FAL_API_KEY === '1',
-//   'skip test if no copilot api key'
-// );
+test.skip(
+  () =>
+    !process.env.COPILOT_OPENAI_API_KEY ||
+    !process.env.COPILOT_FAL_API_KEY ||
+    process.env.COPILOT_OPENAI_API_KEY === '1' ||
+    process.env.COPILOT_FAL_API_KEY === '1',
+  'skip test if no copilot api key'
+);
 
 test('can open chat side panel', async ({ page }) => {
   await openHomePage(page);
