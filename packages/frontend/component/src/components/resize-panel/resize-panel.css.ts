@@ -30,7 +30,7 @@ export const root = style({
       },
     '&[data-open="true"][data-handle-position="right"][data-is-floating="true"]':
       {
-        transform: `translateX(${panelWidthVar})`,
+        transform: `translateX(calc(${panelWidthVar} + 4px))`,
       },
     '&[data-open="true"][data-handle-position="left"][data-is-floating="true"]':
       {
