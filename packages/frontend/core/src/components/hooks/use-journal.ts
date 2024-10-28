@@ -11,10 +11,29 @@ import {
   useServices,
 } from '@toeverything/infra';
 import dayjs from 'dayjs';
+import { useTheme } from 'next-themes';
 import { useCallback, useMemo } from 'react';
 
 import { WorkbenchService } from '../../modules/workbench';
 import { useDocCollectionHelper } from './use-block-suite-workspace-helper';
+
+export const getValueByDefaultTheme = (
+  defaultTheme: string,
+  currentAppTheme: string
+) => {
+  switch (defaultTheme) {
+    case 'dark':
+      return 'dark';
+    case 'light':
+      return 'light';
+    case 'specified':
+      return currentAppTheme === 'dark' ? 'dark' : 'light';
+    case 'auto':
+      return 'system';
+    default:
+      return 'auto';
+  }
+};
 
 type MaybeDate = Date | string | number;
 export const JOURNAL_DATE_FORMAT = 'YYYY-MM-DD';
@@ -35,6 +54,7 @@ function toDayjs(j?: string | false) {
  */
 export const useJournalHelper = (docCollection: DocCollection) => {
   const bsWorkspaceHelper = useDocCollectionHelper(docCollection);
+  const { resolvedTheme } = useTheme();
   const { docsService, editorSettingService, journalService } = useServices({
     DocsService,
     EditorSettingService,
@@ -49,6 +69,13 @@ export const useJournalHelper = (docCollection: DocCollection) => {
       const day = dayjs(maybeDate);
       const title = day.format(JOURNAL_DATE_FORMAT);
       const page = bsWorkspaceHelper.createDoc();
+      const value = getValueByDefaultTheme(
+        editorSettingService.editorSetting.settings$.value.edgelessDefaultTheme,
+        resolvedTheme || 'light'
+      );
+      docsService.list
+        .doc$(page.id)
+        .value?.setProperty('edgelessColorTheme', value);
       docsService.list.setPrimaryMode(page.id, 'page');
       // set created date to match the journal date
       page.collection.setDocMeta(page.id, {
@@ -67,7 +94,13 @@ export const useJournalHelper = (docCollection: DocCollection) => {
       journalService.setJournalDate(page.id, title);
       return page;
     },
-    [journalService, bsWorkspaceHelper, docsService.list, editorSettingService]
+    [
+      bsWorkspaceHelper,
+      editorSettingService.editorSetting,
+      resolvedTheme,
+      docsService.list,
+      journalService,
+    ]
   );
 
   /**

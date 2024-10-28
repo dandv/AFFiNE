@@ -25,6 +25,7 @@ export const EdgelessThemeValue = () => {
   const t = useI18n();
   const doc = useService(DocService).doc;
   const edgelessTheme = useLiveData(doc.properties$).edgelessColorTheme;
+
   const handleChange = useCallback(
     (theme: string) => {
       doc.record.setProperty('edgelessColorTheme', theme);
@@ -32,6 +33,7 @@ export const EdgelessThemeValue = () => {
     [doc]
   );
   const themeItems = useMemo<RadioItem[]>(() => getThemeOptions(t), [t]);
+
   return (
     <PropertyValue className={styles.container} hoverable={false}>
       <RadioGroup

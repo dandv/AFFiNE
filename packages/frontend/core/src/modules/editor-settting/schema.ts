@@ -23,6 +23,9 @@ const AffineEditorSettingSchema = z.object({
   fullWidthLayout: z.boolean().default(false),
   displayDocInfo: z.boolean().default(true),
   displayBiDirectionalLink: z.boolean().default(true),
+  edgelessDefaultTheme: z
+    .enum(['specified', 'dark', 'light', 'auto'])
+    .default('specified'),
 });
 
 export const EditorSettingSchema = BSEditorSettingSchema.merge(
