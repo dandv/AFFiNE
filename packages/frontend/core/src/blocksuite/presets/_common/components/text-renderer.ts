@@ -8,7 +8,6 @@ import {
   DividerBlockComponent,
   ListBlockComponent,
   ParagraphBlockComponent,
-  SpecProvider,
 } from '@blocksuite/affine/blocks';
 import { WithDisposable } from '@blocksuite/affine/global/utils';
 import { BlockViewType, type Doc, type Query } from '@blocksuite/affine/store';
@@ -17,6 +16,7 @@ import { property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 
+import { CustomPageEditorBlockSpecs } from '../utils/custom-specs';
 import { markDownToDoc } from '../utils/markdown-utils';
 
 const textBlockStyles = css`
@@ -107,27 +107,27 @@ export class TextRenderer extends WithDisposable(LitElement) {
       }
     }
 
-    .ai-answer-text-container {
+    .text-renderer-container {
       overflow-y: auto;
       overflow-x: hidden;
       padding: 0;
       overscroll-behavior-y: none;
     }
-    .ai-answer-text-container.show-scrollbar::-webkit-scrollbar {
+    .text-renderer-container.show-scrollbar::-webkit-scrollbar {
       width: 5px;
       height: 100px;
     }
-    .ai-answer-text-container.show-scrollbar::-webkit-scrollbar-thumb {
+    .text-renderer-container.show-scrollbar::-webkit-scrollbar-thumb {
       border-radius: 20px;
     }
-    .ai-answer-text-container.show-scrollbar:hover::-webkit-scrollbar-thumb {
+    .text-renderer-container.show-scrollbar:hover::-webkit-scrollbar-thumb {
       background-color: var(--affine-black-30);
     }
-    .ai-answer-text-container.show-scrollbar::-webkit-scrollbar-corner {
+    .text-renderer-container.show-scrollbar::-webkit-scrollbar-corner {
       display: none;
     }
 
-    .ai-answer-text-container {
+    .text-renderer-container {
       rich-text .nowrap-lines v-text span,
       rich-text .nowrap-lines v-element span {
         white-space: pre;
@@ -137,6 +137,9 @@ export class TextRenderer extends WithDisposable(LitElement) {
       }
       editor-host * {
         box-sizing: border-box;
+      }
+      editor-host {
+        isolation: isolate;
       }
     }
 
@@ -225,15 +228,14 @@ export class TextRenderer extends WithDisposable(LitElement) {
     }
 
     const { maxHeight, customHeading } = this.options;
-    const previewSpec = SpecProvider.getInstance().getSpec('page:preview');
     const classes = classMap({
-      'ai-answer-text-container': true,
+      'text-renderer-container': true,
       'show-scrollbar': !!maxHeight,
       'custom-heading': !!customHeading,
     });
     return html`
       <style>
-        .ai-answer-text-container {
+        .text-renderer-container {
           max-height: ${maxHeight ? Math.max(maxHeight, 200) + 'px' : ''};
         }
       </style>
@@ -243,7 +245,7 @@ export class TextRenderer extends WithDisposable(LitElement) {
           html`<div class="ai-answer-text-editor affine-page-viewport">
             ${new BlockStdScope({
               doc: this._doc,
-              extensions: previewSpec.value,
+              extensions: CustomPageEditorBlockSpecs,
             }).render()}
           </div>`
         )}
@@ -268,7 +270,7 @@ export class TextRenderer extends WithDisposable(LitElement) {
     });
   }
 
-  @query('.ai-answer-text-container')
+  @query('.text-renderer-container')
   private accessor _container!: HTMLDivElement;
 
   @property({ attribute: false })
