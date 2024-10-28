@@ -371,6 +371,16 @@ test.describe('chat with block', () => {
     return answer.getAttribute('src');
   };
 
+  const disableEditorBlank = async (page: Page) => {
+    // hide blank element, this may block the click
+    const blank = page.getByTestId('page-editor-blank');
+    if (await blank.isVisible()) {
+      await blank.evaluate(node => (node.style.pointerEvents = 'none'));
+    } else {
+      console.warn('blank element not found');
+    }
+  };
+
   test.describe('chat with text', () => {
     const pasteTextToPageEditor = async (page: Page, content: string) => {
       await focusToEditor(page);
@@ -418,6 +428,7 @@ test.describe('chat with block', () => {
     ];
     for (const option of options) {
       test(option, async ({ page }) => {
+        await disableEditorBlank(page);
         await page
           .waitForSelector(
             `.ai-item-${option.replaceAll(' ', '-').toLowerCase()}`
@@ -456,6 +467,7 @@ test.describe('chat with block', () => {
 
     test.describe('page mode', () => {
       test.beforeEach(async ({ page }) => {
+        await disableEditorBlank(page);
         await page.waitForSelector('affine-image').then(i => i.click());
         await page
           .waitForSelector('affine-image editor-toolbar ask-ai-button')
@@ -518,6 +530,7 @@ test.describe('chat with block', () => {
           note.click();
         }
 
+        await disableEditorBlank(page);
         await page.waitForSelector('affine-image').then(i => i.click());
         await page
           .waitForSelector('affine-image editor-toolbar ask-ai-button')
