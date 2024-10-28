@@ -103,8 +103,22 @@ export const errorBtns = style({
   marginTop: '28px',
 });
 
-export const viewerPage = style({
+export const mainItemWrapper = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   margin: '20px auto',
+  selectors: {
+    '&:first-of-type': {
+      marginTop: 0,
+    },
+    '&:last-of-type': {
+      marginBottom: 0,
+    },
+  },
+});
+
+export const viewerPage = style({
   maxWidth: 'calc(100% - 40px)',
   background: cssVarV2('layer/white'),
   boxSizing: 'border-box',
@@ -148,8 +162,11 @@ export const thumbnailsPages = style({
   },
 });
 
-export const thumbnailsPage = style({
+export const thumbnailsItemWrapper = style({
   margin: '0px 12px 12px',
+});
+
+export const thumbnailsPage = style({
   display: 'flex',
   overflow: 'clip',
   // width: '100%',

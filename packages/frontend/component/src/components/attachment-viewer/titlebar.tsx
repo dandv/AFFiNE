@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { IconButton } from '../../ui/button';
 import { Menu, MenuItem } from '../../ui/menu';
 import * as styles from './styles.css';
-import { saveBufferToFile } from './utils';
+import { download } from './utils';
 
 const items = [
   {
@@ -23,11 +23,7 @@ const items = [
   {
     name: 'Download',
     icon: <LocalDataIcon />,
-    action(model: AttachmentBlockModel) {
-      const { sourceId, name } = model;
-      if (!sourceId) return;
-      saveBufferToFile(sourceId, name).catch(console.error);
-    },
+    action: download,
   },
 ];
 
@@ -65,7 +61,10 @@ export const Titlebar = ({
           <span>.{ext}</span>
         </div>
         <div>{size}</div>
-        <IconButton icon={<LocalDataIcon />}></IconButton>
+        <IconButton
+          icon={<LocalDataIcon />}
+          onClick={() => download(model)}
+        ></IconButton>
         <Menu
           items={<MenuItems model={model} />}
           rootOptions={{

@@ -2,7 +2,7 @@ import type { AttachmentBlockModel } from '@blocksuite/affine/blocks';
 import { CollapseIcon, ExpandIcon } from '@blocksuite/icons/rc';
 import clsx from 'clsx';
 import { debounce } from 'lodash-es';
-import type { HTMLAttributes, PropsWithChildren, ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import React, {
   useCallback,
   useEffect,
@@ -10,15 +10,18 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import type { VirtuosoHandle } from 'react-virtuoso';
+import type { VirtuosoHandle, VirtuosoProps } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
 
 import { IconButton } from '../../ui/button';
 import { Scrollable } from '../../ui/scrollbar';
+import { observeResize } from '../../utils';
 import * as styles from './styles.css';
-// import { observeResize } from '../../utils';
-import type { MessageData, MessageDataType } from './worker/types';
-import { MessageOp, State } from './worker/types';
+import { getAttachmentBlob, renderItem } from './utils';
+import type { DocInfo, MessageData, MessageDataType } from './worker/types';
+import { MessageOp, MessageState, RenderKind, State } from './worker/types';
+
+type ItemProps = VirtuosoProps<null, undefined>;
 
 const Page = React.memo(
   ({
@@ -34,17 +37,8 @@ const Page = React.memo(
     return (
       <div
         className={className}
-        style={{
-          width: `${width}px`,
-          // height: `${height}px`,
-        }}
-      >
-        <canvas
-          style={{ width: '100%', height: '100%' }}
-          width={width * 2}
-          height={height * 2}
-        />
-      </div>
+        style={{ width: `${width}px`, height: `${height}px` }}
+      ></div>
     );
   }
 );
@@ -68,41 +62,50 @@ const Thumbnail = React.memo(
     onSelect: (index: number) => void;
   }) => {
     return (
-      <div className={className} onClick={() => onSelect(index)}>
-        <canvas
-          style={{ width: '100%', height: '100%' }}
-          width={width * 2}
-          height={height * 2}
-        />
-      </div>
+      <div
+        className={className}
+        style={{ width: `${width}px`, height: `${height}px` }}
+        onClick={() => onSelect(index)}
+      ></div>
     );
   }
 );
 
 Thumbnail.displayName = 'viewer-thumbnail';
 
-const Scroller = React.forwardRef<
-  HTMLDivElement,
-  PropsWithChildren<HTMLAttributes<HTMLDivElement>>
->(({ style, ...props }, ref) => {
-  return (
-    <Scrollable.Root>
-      <Scrollable.Viewport style={{ ...style }} ref={ref} {...props} />
-      <Scrollable.Scrollbar />
-    </Scrollable.Root>
-  );
-});
+const Scroller = React.forwardRef<HTMLDivElement, ItemProps>(
+  ({ ...props }, ref) => {
+    return (
+      <Scrollable.Root>
+        <Scrollable.Viewport ref={ref} {...props} />
+        <Scrollable.Scrollbar />
+      </Scrollable.Root>
+    );
+  }
+);
 
 Scroller.displayName = 'viewer-scroller';
+
+const Item = React.forwardRef<HTMLDivElement, ItemProps>(
+  ({ ...props }, ref) => {
+    return <div ref={ref} {...props} />;
+  }
+);
+
+Item.displayName = 'viewer-item';
 
 interface ViewerProps {
   model: AttachmentBlockModel;
 }
 
 export const Viewer = ({ model }: ViewerProps): ReactElement => {
-  const [connected, setConnected] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [docInfo, setDocInfo] = useState({
+  const [state, setState] = useState(State.Connecting);
+  const [viewportInfo, setViewportInfo] = useState({
+    dpi: window.devicePixelRatio,
+    width: 1,
+    height: 1,
+  });
+  const [docInfo, setDocInfo] = useState<DocInfo>({
     cursor: 0,
     total: 0,
     width: 1,
@@ -127,63 +130,26 @@ export const Viewer = ({ model }: ViewerProps): ReactElement => {
   });
 
   const post = useCallback(
-    <T extends MessageOp>(
-      type: T,
-      data?: MessageDataType[T],
-      transfer = []
-    ) => {
-      workerRef.current?.postMessage(
-        {
-          state: State.Poll,
-          type,
-          [type]: data,
-        },
-        transfer
-      );
+    <T extends MessageOp>(type: T, data?: MessageDataType[T]) => {
+      workerRef.current?.postMessage({
+        type,
+        [type]: data,
+        state: MessageState.Poll,
+      });
     },
     [workerRef]
   );
 
   const render = useCallback(
-    (id: number, imageData: ImageData) => {
-      const el = scrollerRef.current;
-      if (!el) return;
-
-      const canvas: HTMLCanvasElement | null = el.querySelector(
-        `[data-index="${id}"] canvas`
+    (id: number, kind: RenderKind, imageBitmap: ImageBitmap) => {
+      renderItem(
+        (kind === RenderKind.Page ? scrollerRef : thumbnailsScrollerRef)
+          .current,
+        id,
+        imageBitmap
       );
-      if (!canvas) return;
-      if (canvas.dataset.rendered) return;
-
-      // TODO(@fundon): improve
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.putImageData(imageData, 0, 0);
-        canvas.dataset.rendered = 'true';
-      }
     },
-    [scrollerRef]
-  );
-
-  const renderThumbnail = useCallback(
-    (id: number, imageData: ImageData) => {
-      const el = thumbnailsScrollerRef.current;
-      if (!el) return;
-
-      const canvas: HTMLCanvasElement | null = el.querySelector(
-        `[data-index="${id}"] canvas`
-      );
-      if (!canvas) return;
-      if (canvas.dataset.rendered) return;
-
-      // TODO(@fundon): improve
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.putImageData(imageData, 0, 0);
-        canvas.dataset.rendered = 'true';
-      }
-    },
-    [thumbnailsScrollerRef]
+    [scrollerRef, thumbnailsScrollerRef]
   );
 
   const onScroll = useCallback(() => {
@@ -193,7 +159,10 @@ export const Viewer = ({ model }: ViewerProps): ReactElement => {
     const { scrollTop, scrollHeight } = el;
 
     setDocInfo(info => {
-      const cursor = Math.ceil(scrollTop / (scrollHeight / info.total));
+      const cursor = Math.min(
+        Math.ceil(scrollTop / (scrollHeight / info.total)),
+        info.total - 1
+      );
       // thumbnailsScrollerHandleRef.current?.scrollToIndex(cursor)
       return {
         ...info,
@@ -212,41 +181,46 @@ export const Viewer = ({ model }: ViewerProps): ReactElement => {
   );
 
   const updateMainVisibleRange = useMemo(
-    () => debounce(setMainVisibleRange, 233, { leading: true, trailing: true }),
+    () => debounce(setMainVisibleRange, 233, { trailing: true }),
     [setMainVisibleRange]
   );
 
   const updateThumbnailsVisibleRange = useMemo(
-    () =>
-      debounce(setThumbnailsVisibleRange, 233, {
-        leading: true,
-        trailing: true,
-      }),
+    () => debounce(setThumbnailsVisibleRange, 233, { trailing: true }),
     [setThumbnailsVisibleRange]
   );
 
-  // useEffect(() => {
-  //   const el = viewerRef.current;
-  //   if (!el) return;
+  useEffect(() => {
+    const el = viewerRef.current;
+    if (!el) return;
 
-  //   return observeResize(el, entry => {
-  //     console.log(entry);
-  //   });
-  // }, []);
+    return observeResize(el, entry => {
+      const rect = entry.contentRect;
+      setViewportInfo(info => ({
+        ...info,
+        width: rect.width,
+        height: rect.height,
+      }));
+    });
+  }, [viewerRef]);
+
+  useEffect(() => {
+    post(MessageOp.SyncViewportInfo, viewportInfo);
+  }, [viewportInfo, post]);
 
   useEffect(() => {
     const { startIndex, endIndex } = mainVisibleRange;
     let index = startIndex;
-    for (; index < endIndex + 1; index++) {
-      post(MessageOp.Render, { index, kind: 'page' });
+    for (; index <= endIndex; index++) {
+      post(MessageOp.Render, { index, kind: RenderKind.Page });
     }
   }, [mainVisibleRange, post]);
 
   useEffect(() => {
     const { startIndex, endIndex } = thumbnailsVisibleRange;
     let index = startIndex;
-    for (; index < endIndex + 1; index++) {
-      post(MessageOp.Render, { index, kind: 'thumbnail' });
+    for (; index <= endIndex; index++) {
+      post(MessageOp.Render, { index, kind: RenderKind.Thumbnail });
     }
   }, [thumbnailsVisibleRange, post]);
 
@@ -262,29 +236,30 @@ export const Viewer = ({ model }: ViewerProps): ReactElement => {
       const { type, state } = data;
 
       if (type === MessageOp.Init) {
-        setConnected(state === State.Ready);
+        setState(
+          state === MessageState.Ready ? State.Connected : State.Connecting
+        );
         return;
       }
-      if (type === MessageOp.Open) {
-        setLoaded(state === State.Ready);
+      if (type === MessageOp.Open && state === MessageState.Ready) {
+        setState(State.Loaded);
         return;
       }
 
-      if (state === State.Poll) return;
+      if (state === MessageState.Poll) {
+        return;
+      }
 
       switch (type) {
-        case MessageOp.ReadInfo: {
-          const action = data[type];
-          setDocInfo(info => ({ ...info, ...action }));
+        case MessageOp.SyncDocInfo: {
+          const updated = data[type];
+          setDocInfo(info => ({ ...info, ...updated }));
+          setState(State.Synced);
           break;
         }
         case MessageOp.Rendered: {
-          const { index, imageData, kind } = data[type];
-          if (kind === 'page') {
-            render(index, imageData);
-          } else {
-            renderThumbnail(index, imageData);
-          }
+          const { index, kind, imageBitmap } = data[type];
+          render(index, kind, imageBitmap);
           break;
         }
       }
@@ -297,56 +272,79 @@ export const Viewer = ({ model }: ViewerProps): ReactElement => {
     return () => {
       workerRef.current?.terminate();
     };
-  }, [model, post, render, renderThumbnail]);
+  }, [model, post, render]);
 
   useEffect(() => {
-    if (!connected) return;
     if (!model.sourceId) return;
 
-    model.doc.blobSync
-      .get(model.sourceId)
-      .then(blob => {
-        if (!blob) return;
-        post(MessageOp.Open, { blob, dpi: window.devicePixelRatio });
-      })
-      .catch(console.error);
-  }, [connected, model, post]);
+    if (state === State.Connected) {
+      getAttachmentBlob(model)
+        .then(blob => {
+          if (!blob) return;
+          setState(State.Loading);
+          post(MessageOp.Open, { blob });
+        })
+        .catch(console.error);
+      return;
+    }
 
-  useEffect(() => {
-    if (!loaded) return;
-    post(MessageOp.ReadInfo);
-  }, [loaded, post]);
+    if (state === State.Loaded) {
+      setState(State.Syncing);
+      post(MessageOp.SyncDocInfo);
+      return;
+    }
+  }, [state, post, model, docInfo]);
 
-  const pageContent = (index: number) => {
-    return (
-      <Page
-        key={index}
-        index={index}
-        className={styles.viewerPage}
-        width={docInfo.width}
-        height={docInfo.height}
-      />
-    );
-  };
+  const pageContent = useCallback(
+    (index: number) => {
+      return (
+        <Page
+          key={index}
+          index={index}
+          className={styles.viewerPage}
+          width={docInfo.width}
+          height={docInfo.height}
+        />
+      );
+    },
+    [docInfo]
+  );
 
-  const thumbnailContent = (index: number) => {
-    return (
-      <Thumbnail
-        key={index}
-        index={index}
-        className={clsx([
-          styles.thumbnailsPage,
-          { selected: index === docInfo.cursor },
-        ])}
-        width={THUMBNAIL_WIDTH}
-        height={(docInfo.height / docInfo.width) * THUMBNAIL_WIDTH}
-        onSelect={onSelect}
-      />
-    );
-  };
+  const thumbnailContent = useCallback(
+    (index: number) => {
+      return (
+        <Thumbnail
+          key={index}
+          index={index}
+          className={clsx([
+            styles.thumbnailsPage,
+            { selected: index === docInfo.cursor },
+          ])}
+          width={THUMBNAIL_WIDTH}
+          height={Math.ceil((docInfo.height / docInfo.width) * THUMBNAIL_WIDTH)}
+          onSelect={onSelect}
+        />
+      );
+    },
+    [docInfo, onSelect]
+  );
 
-  const components = useMemo(() => {
+  const mainComponents = useMemo(() => {
     return {
+      Header: () => <div style={{ width: '100%', height: '20px' }} />,
+      Footer: () => <div style={{ width: '100%', height: '20px' }} />,
+      Item: (props: ItemProps) => (
+        <Item className={styles.mainItemWrapper} {...props} />
+      ),
+      Scroller,
+    };
+  }, []);
+
+  const thumbnailsComponents = useMemo(() => {
+    return {
+      Item: (props: ItemProps) => (
+        <Item className={styles.thumbnailsItemWrapper} {...props} />
+      ),
       Scroller,
     };
   }, []);
@@ -362,7 +360,7 @@ export const Viewer = ({ model }: ViewerProps): ReactElement => {
       ])}
       ref={viewerRef}
     >
-      <Virtuoso
+      <Virtuoso<null, ItemProps['context']>
         onScroll={onScroll}
         ref={scrollerHandleRef}
         scrollerRef={scroller => {
@@ -372,17 +370,17 @@ export const Viewer = ({ model }: ViewerProps): ReactElement => {
         className={styles.virtuoso}
         rangeChanged={updateMainVisibleRange}
         increaseViewportBy={{
-          top: docInfo.height * Math.min(5, docInfo.total),
-          bottom: docInfo.height * Math.min(5, docInfo.total),
+          top: (docInfo.height + 20) * Math.min(5, docInfo.total),
+          bottom: (docInfo.height + 20) * Math.min(5, docInfo.total),
         }}
         totalCount={docInfo.total}
         itemContent={pageContent}
-        components={components}
+        components={mainComponents}
       />
       <div className={styles.thumbnails}>
         {collapsed ? null : (
           <div className={clsx([styles.thumbnailsPages, { collapsed }])}>
-            <Virtuoso
+            <Virtuoso<null, ItemProps['context']>
               style={{
                 height:
                   Math.min(3, docInfo.total) *
@@ -398,7 +396,7 @@ export const Viewer = ({ model }: ViewerProps): ReactElement => {
               className={styles.virtuoso}
               totalCount={docInfo.total}
               itemContent={thumbnailContent}
-              components={components}
+              components={thumbnailsComponents}
             />
           </div>
         )}

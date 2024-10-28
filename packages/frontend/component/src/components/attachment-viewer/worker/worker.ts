@@ -8,55 +8,35 @@ import {
 } from '@toeverything/pdf-viewer';
 
 import type { MessageData, MessageDataType } from './types';
-import { MessageOp, State } from './types';
+import { MessageOp, MessageState, RenderKind } from './types';
+import { resizeImageBitmap } from './utils';
 
-const logger = new DebugLogger('affine:pdf-worker');
+const logger = new DebugLogger('affine:worker:pdf');
 
-let dpi = 2;
 let inited = false;
 let viewer: Viewer | null = null;
 let doc: Document | undefined = undefined;
 
-const cached = new Map<number, ImageData>();
+const canvas = new OffscreenCanvas(0, 0);
+const ctx = canvas.getContext('2d');
+const cached = new Map<number, ImageBitmap>();
 const docInfo = { cursor: 0, total: 0, width: 1, height: 1 };
+const viewportInfo = { dpi: 2, width: 1, height: 1 };
 const flags = PageRenderingflags.REVERSE_BYTE_ORDER | PageRenderingflags.ANNOT;
 
 function post<T extends MessageOp>(type: T, data?: MessageDataType[T]) {
-  self.postMessage({ state: State.Ready, type, [type]: data });
-}
-
-async function resizeImageData(
-  imageData: ImageData,
-  options: {
-    resizeWidth: number;
-    resizeHeight: number;
-  }
-) {
-  const { resizeWidth: w, resizeHeight: h } = options;
-  const bitmap = await createImageBitmap(
-    imageData,
-    0,
-    0,
-    imageData.width,
-    imageData.height,
-    options
-  );
-  const canvas = new OffscreenCanvas(w, h);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return imageData;
-  ctx.drawImage(bitmap, 0, 0);
-  return ctx.getImageData(0, 0, w, h);
+  self.postMessage({ state: MessageState.Ready, type, [type]: data });
 }
 
 async function start() {
   logger.debug('pdf worker pending');
-  self.postMessage({ state: State.Poll, type: MessageOp.Init });
+  self.postMessage({ state: MessageState.Poll, type: MessageOp.Init });
 
   const pdfium = await createPDFium();
   viewer = new Viewer(new Runtime(pdfium));
   inited = true;
 
-  self.postMessage({ state: State.Ready, type: MessageOp.Init });
+  self.postMessage({ state: MessageState.Ready, type: MessageOp.Init });
   logger.debug('pdf worker ready');
 }
 
@@ -69,14 +49,13 @@ async function process({ data }: MessageEvent<MessageData>) {
 
   const { type, state } = data;
 
-  if (state !== State.Poll) return;
+  if (state !== MessageState.Poll) return;
 
   switch (type) {
     case MessageOp.Open: {
       const action = data[type];
       if (!action?.blob) return;
 
-      dpi = action.dpi;
       doc = await viewer.openWithBlob(action.blob);
 
       if (!doc) return;
@@ -85,17 +64,36 @@ async function process({ data }: MessageEvent<MessageData>) {
       break;
     }
 
-    case MessageOp.ReadInfo: {
+    case MessageOp.SyncViewportInfo: {
+      const updated = data[type];
+
+      if (updated) {
+        Object.assign(viewportInfo, updated);
+      }
+
+      break;
+    }
+
+    case MessageOp.SyncDocInfo: {
       if (!doc) return;
 
+      const updated = data[type];
+
+      if (updated) {
+        Object.assign(docInfo, updated);
+      }
+
       const page = doc.page(0);
+
       if (page) {
-        docInfo.cursor = 0;
-        docInfo.total = doc.pageCount();
-        docInfo.height = page.height();
-        docInfo.width = page.width();
+        Object.assign(docInfo, {
+          cursor: 0,
+          total: doc.pageCount(),
+          height: Math.ceil(page.height()),
+          width: Math.ceil(page.width()),
+        });
         page.close();
-        post(MessageOp.ReadInfo, docInfo);
+        post(MessageOp.SyncDocInfo, docInfo);
       }
       break;
     }
@@ -105,24 +103,23 @@ async function process({ data }: MessageEvent<MessageData>) {
 
       const { index, kind } = data[type];
 
-      let imageData = cached.size > 0 ? cached.get(index) : undefined;
-      if (imageData) {
-        if (kind === 'thumbnail') {
-          const resizeWidth = (94 * dpi) >> 0;
-          const resizeHeight =
-            ((docInfo.height / docInfo.width) * resizeWidth) >> 0;
-          imageData = await resizeImageData(imageData, {
-            resizeWidth,
-            resizeHeight,
+      let imageBitmap = cached.size > 0 ? cached.get(index) : undefined;
+      if (imageBitmap) {
+        if (kind === RenderKind.Thumbnail) {
+          const rw = 94 * viewportInfo.dpi;
+          const rh = (docInfo.height / docInfo.width) * rw;
+          imageBitmap = await resizeImageBitmap(imageBitmap, {
+            resizeWidth: Math.ceil(rw),
+            resizeHeight: Math.ceil(rh),
           });
         }
 
-        post(MessageOp.Rendered, { index, imageData, kind });
+        post(MessageOp.Rendered, { index, kind, imageBitmap });
         return;
       }
 
-      const width = Math.ceil(docInfo.width * dpi);
-      const height = Math.ceil(docInfo.height * dpi);
+      const width = Math.ceil(docInfo.width * viewportInfo.dpi);
+      const height = Math.ceil(docInfo.height * viewportInfo.dpi);
       const page = doc.page(index);
 
       if (page) {
@@ -135,21 +132,31 @@ async function process({ data }: MessageEvent<MessageData>) {
         bitmap.close();
         page.close();
 
-        imageData = new ImageData(new Uint8ClampedArray(data), width, height);
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        const imageData = new ImageData(
+          new Uint8ClampedArray(data),
+          width,
+          height
+        );
+        ctx?.clearRect(0, 0, width, height);
+        ctx?.putImageData(imageData, 0, 0);
+        imageBitmap = canvas.transferToImageBitmap();
 
-        cached.set(index, imageData);
+        cached.set(index, imageBitmap);
 
-        if (kind === 'thumbnail') {
-          const resizeWidth = (94 * dpi) >> 0;
-          const resizeHeight =
-            ((docInfo.height / docInfo.width) * resizeWidth) >> 0;
-          imageData = await resizeImageData(imageData, {
-            resizeWidth,
-            resizeHeight,
+        if (kind === RenderKind.Thumbnail) {
+          const rw = 94 * viewportInfo.dpi;
+          const rh = (docInfo.height / docInfo.width) * rw;
+          imageBitmap = await resizeImageBitmap(imageBitmap, {
+            resizeWidth: Math.ceil(rw),
+            resizeHeight: Math.ceil(rh),
           });
         }
 
-        post(MessageOp.Rendered, { index, imageData, kind });
+        post(MessageOp.Rendered, { index, kind, imageBitmap });
       }
 
       break;
